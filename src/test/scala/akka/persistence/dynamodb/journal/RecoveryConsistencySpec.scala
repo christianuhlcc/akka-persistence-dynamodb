@@ -3,16 +3,16 @@
  */
 package akka.persistence.dynamodb.journal
 
-import org.scalactic.ConversionCheckedTripleEquals
+import java.util.{ HashMap => JHMap }
+
+import akka.actor.ActorSystem
+import akka.persistence.JournalProtocol._
+import akka.persistence._
+import akka.testkit._
+import com.amazonaws.services.dynamodbv2.model._
+import org.scalactic.TypeCheckedTripleEquals
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
-import akka.actor.ActorSystem
-import akka.persistence._
-import akka.persistence.JournalProtocol._
-import akka.testkit._
-import akka.persistence.journal.AsyncWriteTarget.ReplaySuccess
-import com.amazonaws.services.dynamodbv2.model._
-import java.util.{ HashMap => JHMap }
 
 class RecoveryConsistencySpec extends TestKit(ActorSystem("FailureReportingSpec"))
     with ImplicitSender
@@ -20,12 +20,15 @@ class RecoveryConsistencySpec extends TestKit(ActorSystem("FailureReportingSpec"
     with BeforeAndAfterAll
     with Matchers
     with ScalaFutures
-    with ConversionCheckedTripleEquals
+    with TypeCheckedTripleEquals
     with DynamoDBUtils {
 
-  override def beforeAll(): Unit = ensureJournalTableExists()
+  override def beforeAll(): Unit = {
+    System.setProperty("aws.accessKeyId", "NotUsed")
+    System.setProperty("aws.secretKey", "NotUsed")
+    ensureJournalTableExists()
+  }
   override def afterAll(): Unit = {
-    client.shutdown()
     system.terminate().futureValue
   }
 
@@ -47,7 +50,7 @@ class RecoveryConsistencySpec extends TestKit(ActorSystem("FailureReportingSpec"
       journal ! WriteMessages(writes, testActor, 1)
       journal ! ReplayMessages(1, 0, Long.MaxValue, persistenceId, probe.ref)
       expectMsg(WriteMessagesSuccessful)
-      (1 to messages) foreach (i => expectMsgType[WriteMessageSuccess].persistent.sequenceNr should ===(i))
+      (1L to messages) foreach (i => expectMsgType[WriteMessageSuccess].persistent.sequenceNr should ===(i))
       probe.expectMsg(RecoverySuccess(messages))
     }
 
@@ -70,7 +73,7 @@ class RecoveryConsistencySpec extends TestKit(ActorSystem("FailureReportingSpec"
       journal ! ReplayMessages(0, Long.MaxValue, Long.MaxValue, persistenceId, testActor)
       for {
         i <- 1 to (messages + 19)
-        if (i <= messages || (i >= (messages + 7) && i <= (messages + 9)) || i == (messages + 16))
+        if i <= messages || (i >= (messages + 7) && i <= (messages + 9)) || i == (messages + 16)
       } expectMsg(ReplayedMessage(generatedMessages(i)))
       expectMsg(RecoverySuccess(messages + 18))
 

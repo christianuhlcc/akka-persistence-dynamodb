@@ -3,19 +3,20 @@
  */
 package akka.persistence.dynamodb
 
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.services.dynamodbv2._
-import com.amazonaws.services.dynamodbv2.model._
-import akka.actor.{ ActorSystem, Scheduler }
-import akka.event.{ Logging, LoggingAdapter }
-import java.util.{ Map => JMap }
-import scala.concurrent._
-import scala.util.{ Try, Success, Failure }
-import java.util.concurrent.{ ThreadPoolExecutor, LinkedBlockingQueue, TimeUnit }
-import scala.collection.generic.CanBuildFrom
-import java.util.concurrent.Executors
-import java.util.Collections
 import java.nio.ByteBuffer
+import java.util.{ Map => JMap }
+
+import akka.actor.ActorSystem
+import akka.event.Logging
+import akka.stream.ActorMaterializer
+import akka.stream.alpakka.dynamodb.impl.DynamoSettings
+import akka.stream.alpakka.dynamodb.scaladsl.DynamoClient
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.services.dynamodbv2.model._
+
+import scala.collection.generic.CanBuildFrom
+import scala.concurrent._
+import scala.util.{ Failure, Success, Try }
 
 package object journal {
 
@@ -32,9 +33,7 @@ package object journal {
 
   val KeyPayloadOverhead = 26 // including fixed parts of partition key and 36 bytes fudge factor
 
-  import collection.JavaConverters._
-
-  val schema = new CreateTableRequest()
+  val schema: CreateTableRequest = new CreateTableRequest()
     .withKeySchema(
       new KeySchemaElement().withAttributeName(Key).withKeyType(KeyType.HASH),
       new KeySchemaElement().withAttributeName(Sort).withKeyType(KeyType.RANGE)
@@ -47,7 +46,9 @@ package object journal {
   def S(value: String): AttributeValue = new AttributeValue().withS(value)
 
   def N(value: Long): AttributeValue = new AttributeValue().withN(value.toString)
+
   def N(value: String): AttributeValue = new AttributeValue().withN(value)
+
   val Naught = N(0)
 
   def B(value: Array[Byte]): AttributeValue = new AttributeValue().withB(ByteBuffer.wrap(value))
@@ -75,27 +76,19 @@ package object journal {
       for (r <- fr; b <- fb) yield (r += b)
     }.map(_.result())
 
-  def dynamoClient(system: ActorSystem, settings: DynamoDBJournalConfig): DynamoDBHelper = {
-    val client =
-      if (settings.AwsKey.nonEmpty && settings.AwsSecret.nonEmpty) {
-        val conns = settings.client.config.getMaxConnections
-        val executor = Executors.newFixedThreadPool(conns)
-        val creds = new BasicAWSCredentials(settings.AwsKey, settings.AwsSecret)
-        new AmazonDynamoDBAsyncClient(creds, settings.client.config, executor)
-      } else {
-        new AmazonDynamoDBAsyncClient(settings.client.config)
-      }
-    client.setEndpoint(settings.Endpoint)
-    val dispatcher = system.dispatchers.lookup(settings.ClientDispatcher)
+  def dynamoClient(system: ActorSystem, config: DynamoDBJournalConfig): DynamoDBHelper = {
+    val dynamoSettings = new DynamoSettings(region = config.AwsRegion, host = config.DynamoHost, port = config.DynamoPort, parallelism = config.DynamoParallelism)
+    implicit val implictSystem = system
+    implicit val mat = ActorMaterializer()
+    val alpakkaDynamoClient = new DynamoClient(dynamoSettings)
 
-    class DynamoDBClient(
-      override val ec:        ExecutionContext,
-      override val dynamoDB:  AmazonDynamoDBAsyncClient,
-      override val settings:  DynamoDBJournalConfig,
-      override val scheduler: Scheduler,
-      override val log:       LoggingAdapter
-    ) extends DynamoDBHelper
+    val dispatcher = system.dispatchers.lookup(config.ClientDispatcher)
 
-    new DynamoDBClient(dispatcher, client, settings, system.scheduler, Logging(system, "DynamoDBClient"))
+    new DynamoDBHelper {
+      override val ec = system.dispatcher
+      override val client = alpakkaDynamoClient
+      override val settings = config
+      override val log = Logging(system, "DynamoDBClient")
+    }
   }
 }

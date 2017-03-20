@@ -139,7 +139,6 @@ class DynamoDBIntegrationLoadSpec
   }
 
   override def afterAll(): Unit = {
-    client.shutdown()
     system.terminate()
   }
 

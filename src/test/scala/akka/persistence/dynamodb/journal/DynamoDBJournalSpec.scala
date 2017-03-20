@@ -3,26 +3,26 @@
  */
 package akka.persistence.dynamodb.journal
 
+import akka.actor.ActorRef
+import akka.pattern.extended.ask
+import akka.persistence.CapabilityFlag
 import akka.persistence.journal.JournalSpec
-import com.amazonaws.services.dynamodbv2.model.{ CreateTableRequest, DeleteTableRequest, ListTablesRequest, ProvisionedThroughput }
 import com.typesafe.config.ConfigFactory
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import akka.persistence.CapabilityFlag
-import scala.concurrent.Future
-import akka.pattern.extended.ask
-import akka.actor.ActorRef
 
 class DynamoDBJournalSpec extends JournalSpec(ConfigFactory.load()) with DynamoDBUtils {
 
   override def beforeAll(): Unit = {
     super.beforeAll()
+    System.setProperty("aws.accessKeyId", "NotUsed")
+    System.setProperty("aws.secretKey", "NotUsed")
     ensureJournalTableExists()
   }
 
   override def afterAll(): Unit = {
     super.afterAll()
-    client.shutdown()
   }
 
   override def writeMessages(fromSnr: Int, toSnr: Int, pid: String, sender: ActorRef, writerUuid: String): Unit = {

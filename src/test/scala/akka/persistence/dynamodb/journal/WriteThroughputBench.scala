@@ -159,7 +159,6 @@ writer-dispatcher {
   scala.io.StdIn.readLine()
 
   system.terminate()
-  client.shutdown()
 
   def printStats(r: Report): Unit = {
     def p(h: Histogram, pc: Double) = h.getValueAtPercentile(pc) / 1000000d

@@ -20,14 +20,14 @@ This plugin is published to the Maven Central repository with the following name
 <dependency>
     <groupId>com.typesafe.akka</groupId>
     <artifactId>akka-persistence-dynamodb_2.11</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 ~~~
 
 or for sbt users:
 
 ```sbt
-libraryDependencies += "com.typesafe.akka" % "akka-persistence-dynamodb_2.11" % "1.0.0"
+libraryDependencies += "com.typesafe.akka" % "akka-persistence-dynamodb_2.11" % "1.1.0"
 ```
 
 Substitute the `_2.11` suffix by `_2.12` when using Scala version 2.12.1 or greater. This plugin requires Java 8 (just as Akka itself).
@@ -36,16 +36,18 @@ Configuration
 -------------
 
 ~~~
-akka.persistence.journal.plugin = "my-dynamodb-journal"
-
-my-dynamodb-journal = ${dynamodb-journal} # include the default settings
-my-dynamodb-journal {                     # and add some overrides
-    journal-table =  <the name of the table to be used>
-    journal-name =  <prefix to be used for all keys stored by this plugin>
-    aws-access-key-id =  <your key>
-    aws-secret-access-key =  <your secret>
-    endpoint =  "https://dynamodb.us-east-1.amazonaws.com" # or where your deployment is
+dynamodb-journal {
+  journal-table = <your table name>
+  
+  akka.stream.alpakka.dynamodb {
+    port = <default for HTTP/HTTPS>
+    host = <check https://docs.aws.amazon.com/general/latest/gr/rande.html#ddb_region>
+    region = "<your region>
+    parallelism = <a sensible number>
+  }
 }
+
+akka.persistence.journal.plugin = "dynamodb-journal"
 ~~~
 
 For details on the endpoint URL please refer to the [DynamoDB documentation](http://docs.aws.amazon.com/general/latest/gr/rande.html#ddb_region). There are many more settings that can be used for fine-tuning and adapting this journal plugin to your use-case, please refer to the [reference.conf](https://github.com/akka/akka-persistence-dynamodb/blob/master/src/main/resources/reference.conf) file.
@@ -54,6 +56,9 @@ Before you can use these settings you will have to create a table, e.g. using th
 
   * a hash key of type String with name `par`
   * a sort key of type Number with name `num`
+
+
+This connector uses the default credential provider chain provided by the DynamoDB Java SDK to retrieve credentials.
 
 Storage Semantics
 -----------------
@@ -72,17 +77,6 @@ else {
 In the first case a recovery will only ever see all of the events or none of them. This is also true if recovery is requested with an upper limit on the sequence number to be recovered to or a limit on the number of events to be replayed; the event count limit is applied before removing incomplete batch writes which means that the actual count of events received at the actor may be lower than the requested limit even if further events are available.
 
 In the second case each event is treated in isolation and may or may not be replayed depending on whether it was persisted successfully or not.
-
-Performance Considerations
---------------------------
-
-This plugin uses the AWS Java SDK which means that the number of requests that can be made concurrently is limited by the number of connections to DynamoDB and by the number of threads in the thread-pool that is used by the AWS HTTP client. The default setting is 50 connections which for a deployment that is used from the same EC2 region allows roughly 5000 requests per second (where every persisted event batch is roughly one request). If a single ActorSystem needs to persist more than this number of events per second then you may want to tune the parameter
-
-~~~
-my-dynamodb-journal.aws-client-config.max-connections = <your value here>
-~~~
-
-Changing this number changes both the number of concurrent connections and the used thread-pool size.
 
 Compatibility with pre-1.0 versions
 -----------------------------------
