@@ -3,16 +3,21 @@
  */
 package akka.persistence.dynamodb.journal
 
-import com.amazonaws.services.dynamodbv2.model._
-import scala.concurrent.Await
-import akka.actor.ActorSystem
-import scala.concurrent.Future
-import scala.concurrent.duration._
-import akka.persistence.Persistence
-import akka.util.Timeout
 import java.util.UUID
+
+import akka.actor.{ ActorSystem, Scheduler }
+import akka.event.{ Logging, LoggingAdapter }
 import akka.persistence.PersistentRepr
+import akka.stream.ActorMaterializer
+import akka.stream.alpakka.dynamodb.impl.DynamoSettings
+import akka.stream.alpakka.dynamodb.scaladsl.DynamoClient
+import akka.util.Timeout
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.services.dynamodbv2.model._
+
 import scala.collection.JavaConverters._
+import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.concurrent.duration._
 
 trait DynamoDBUtils {
 
@@ -71,5 +76,27 @@ trait DynamoDBUtils {
     val ret = PersistentRepr(msg, sequenceNr = seqNr(), persistenceId = persistenceId, writerUuid = writerUuid)
     generatedMessages :+= ret
     ret
+  }
+
+  private def dynamoClient(system: ActorSystem, settings: DynamoDBJournalConfig): DynamoDBTestingHelper = {
+
+    val conns = settings.client.config.getMaxConnections
+    val creds = new BasicAWSCredentials(settings.AwsKey, settings.AwsSecret)
+    val betterSettings = new DynamoSettings(region = settings.AwsRegion, host = "localhost", port = 8000, parallelism = 5)
+    implicit val implicitSystem = system
+    implicit val mat = ActorMaterializer()
+
+    val client = new DynamoClient(betterSettings)
+
+    val dispatcher = system.dispatchers.lookup(settings.ClientDispatcher)
+
+    class DynamoDBClient(
+      override val ec:       ExecutionContext,
+      override val client:   DynamoClient,
+      override val settings: DynamoDBJournalConfig,
+      override val log:      LoggingAdapter
+    ) extends DynamoDBTestingHelper
+
+    new DynamoDBClient(dispatcher, client, settings, Logging(system, "DynamoDBClient"))
   }
 }

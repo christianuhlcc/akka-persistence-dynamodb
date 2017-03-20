@@ -3,17 +3,17 @@
  */
 package akka.persistence.dynamodb.journal
 
-import com.typesafe.config.Config
-import akka.actor.ActorSystem
 import java.net.InetAddress
-import com.amazonaws.ClientConfiguration
-import com.amazonaws.Protocol
+
+import com.amazonaws.{ ClientConfiguration, Protocol }
+import com.typesafe.config.Config
 
 class DynamoDBJournalConfig(c: Config) {
   val JournalTable = c getString "journal-table"
   val JournalName = c getString "journal-name"
   val AwsKey = c getString "aws-access-key-id"
   val AwsSecret = c getString "aws-secret-access-key"
+  val AwsRegion = c getString "aws-region"
   val Endpoint = c getString "endpoint"
   val ReplayDispatcher = c getString "replay-dispatcher"
   val ClientDispatcher = c getString "client-dispatcher"
@@ -25,6 +25,9 @@ class DynamoDBJournalConfig(c: Config) {
   val MaxBatchGet = c getInt "aws-api-limits.max-batch-get"
   val MaxBatchWrite = c getInt "aws-api-limits.max-batch-write"
   val MaxItemSize = c getInt "aws-api-limits.max-item-size"
+
+  val ApiRequestMaxRetries = c getInt "aws-api-limits.max-retries"
+  val ApiRequestInitialBackoff = c getInt "aws-api-limits.initial-backoff-ms"
 
   object client {
     private val cc = c getConfig "aws-client-config"
@@ -75,6 +78,7 @@ class DynamoDBJournalConfig(c: Config) {
     "JournalTable:" + JournalTable +
     ",JournalName:" + JournalName +
     ",AwsKey:" + AwsKey +
+    ",AwsRegion:" + AwsRegion +
     ",Endpoint:" + Endpoint +
     ",ReplayDispatcher:" + ReplayDispatcher +
     ",ClientDispatcher:" + ClientDispatcher +
@@ -84,5 +88,8 @@ class DynamoDBJournalConfig(c: Config) {
     ",MaxBatchGet:" + MaxBatchGet +
     ",MaxBatchWrite:" + MaxBatchWrite +
     ",MaxItemSize:" + MaxItemSize +
-    ",client.config:" + client
+    ",ApiRequestMaxRetries:" + ApiRequestMaxRetries +
+    ",ApiRequestInitialBackoff:" + ApiRequestInitialBackoff +
+    ",client.config:" + client +
+    ")"
 }

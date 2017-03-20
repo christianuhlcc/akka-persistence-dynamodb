@@ -8,15 +8,15 @@ val akkaVersion = "2.4.14"
 val amzVersion = "1.11.66"
 
 libraryDependencies ++= Seq(
-  "com.amazonaws"       % "aws-java-sdk-core"       % amzVersion,
-  "com.amazonaws"       % "aws-java-sdk-dynamodb"   % amzVersion,
-  "com.typesafe.akka"   %% "akka-persistence"       % akkaVersion,
-  "com.typesafe.akka"   %% "akka-stream"            % akkaVersion,
-  "com.typesafe.akka"   %% "akka-persistence-tck"   % akkaVersion   % "test",
-  "com.typesafe.akka"   %% "akka-testkit"           % akkaVersion   % "test",
-  "org.scalatest"       %% "scalatest"              % "3.0.1"       % "test",
-  "commons-io"          % "commons-io"              % "2.4"         % "test",
-  "org.hdrhistogram"    % "HdrHistogram"            % "2.1.8"       % "test"
+  "com.lightbend.akka" %% "akka-stream-alpakka-dynamodb"  % "0.6",
+  "com.typesafe.akka"   %% "akka-persistence"             % akkaVersion,
+  "com.typesafe.akka"   %% "akka-stream"                  % akkaVersion,
+  "com.typesafe.akka"   %% "akka-persistence-tck"         % akkaVersion   % "test",
+  "com.typesafe.akka"   %% "akka-testkit"                 % akkaVersion   % "test",
+  "org.scalatest"       %% "scalatest"                    % "3.0.1"       % "test",
+  "commons-io"          % "commons-io"                    % "2.4"         % "test",
+  "org.hdrhistogram"    % "HdrHistogram"                  % "2.1.8"       % "test",
+  "org.mockito"         % "mockito-core"                  % "2.7.19"      % "test"
 )
 
 parallelExecution in Test := false

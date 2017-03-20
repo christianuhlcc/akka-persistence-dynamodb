@@ -3,19 +3,19 @@
  */
 package akka.persistence.dynamodb.journal
 
-import org.scalatest._
-import org.scalatest.concurrent.ScalaFutures
-import org.scalactic.ConversionCheckedTripleEquals
 import akka.actor._
-import akka.testkit._
-import scala.concurrent.duration._
-import com.typesafe.config.ConfigFactory
-import akka.persistence._
-import com.amazonaws.services.dynamodbv2.model._
 import akka.event.Logging
 import akka.persistence.JournalProtocol._
-import java.util.UUID
+import akka.persistence._
+import akka.testkit._
+import com.amazonaws.services.dynamodbv2.model._
+import com.typesafe.config.ConfigFactory
+import org.scalactic.TypeCheckedTripleEquals
+import org.scalatest._
+import org.scalatest.concurrent.ScalaFutures
+
 import scala.collection.JavaConverters._
+import scala.concurrent.duration._
 
 class FailureReportingSpec extends TestKit(ActorSystem("FailureReportingSpec"))
     with ImplicitSender
@@ -23,7 +23,7 @@ class FailureReportingSpec extends TestKit(ActorSystem("FailureReportingSpec"))
     with BeforeAndAfterAll
     with Matchers
     with ScalaFutures
-    with ConversionCheckedTripleEquals
+    with TypeCheckedTripleEquals
     with DynamoDBUtils {
 
   implicit val patience = PatienceConfig(5.seconds)
@@ -46,9 +46,13 @@ class FailureReportingSpec extends TestKit(ActorSystem("FailureReportingSpec"))
     rej.cause.getMessage should include regex msg
   }
 
-  override def beforeAll(): Unit = ensureJournalTableExists()
+  override def beforeAll(): Unit = {
+    System.setProperty("aws.accessKeyId", "NotUsed")
+    System.setProperty("aws.secretKey", "NotUsed")
+    ensureJournalTableExists()
+  }
+
   override def afterAll(): Unit = {
-    client.shutdown()
     system.terminate().futureValue
   }
 
@@ -60,7 +64,7 @@ class FailureReportingSpec extends TestKit(ActorSystem("FailureReportingSpec"))
         .withFallback(ConfigFactory.load())
       implicit val system = ActorSystem("FailureReportingSpec-test1", config)
       try
-        EventFilter[ResourceNotFoundException](pattern = ".*ThisTableDoesNotExist.*", occurrences = 1).intercept {
+        EventFilter[ResourceNotFoundException](pattern = ".*", occurrences = 1).intercept {
           Persistence(system).journalFor("")
         }
       finally system.terminate()
@@ -117,7 +121,7 @@ akka.loggers = ["akka.testkit.TestEventListener"]
         EventFilter[ResourceNotFoundException](pattern = ".*akka-persistence.*", occurrences = 1).intercept {
           Persistence(system).journalFor("")
         }
-        probe.expectMsgType[Logging.Error].message.toString should include("DescribeTableRequest(akka-persistence)")
+        probe.expectMsgType[Logging.Error].message.toString should include("DescribeTableRequest")
         probe.expectMsgType[Logging.Error].message.toString should include("until the table 'akka-persistence'")
         probe.expectNoMsg(0.seconds)
       } finally system.terminate()
@@ -183,59 +187,59 @@ akka.loggers = ["akka.testkit.TestEventListener"]
     }
 
     "have sensible error messages" when {
-      import client._
-      def desc[T](aws: T)(implicit d: Describe[_ >: T]): String = d.desc(aws)
+      import Describe._
+
       val keyItem = Map(Key -> S("TheKey"), Sort -> N("42")).asJava
       val key2Item = Map(Key -> S("The2Key"), Sort -> N("43")).asJava
 
       "reporting table problems" in {
         val aws = new DescribeTableRequest().withTableName("TheTable")
-        desc(aws) should include("DescribeTable")
-        desc(aws) should include("TheTable")
+        describe(aws) should include("DescribeTable")
+        describe(aws) should include("TheTable")
       }
 
       "reporting putItem problems" in {
         val aws = new PutItemRequest().withTableName("TheTable").withItem(keyItem)
-        desc(aws) should include("PutItem")
-        desc(aws) should include("TheTable")
-        desc(aws) should include("TheKey")
-        desc(aws) should include("42")
+        describe(aws) should include("PutItem")
+        describe(aws) should include("TheTable")
+        describe(aws) should include("TheKey")
+        describe(aws) should include("42")
       }
 
       "reporting deleteItem problems" in {
         val aws = new DeleteItemRequest().withTableName("TheTable").withKey(keyItem)
-        desc(aws) should include("DeleteItem")
-        desc(aws) should include("TheTable")
-        desc(aws) should include("TheKey")
-        desc(aws) should include("42")
+        describe(aws) should include("DeleteItem")
+        describe(aws) should include("TheTable")
+        describe(aws) should include("TheKey")
+        describe(aws) should include("42")
       }
 
       "reporting query problems" in {
         val aws = new QueryRequest().withTableName("TheTable").withExpressionAttributeValues(Map(":kkey" -> S("TheKey")).asJava)
-        desc(aws) should include("Query")
-        desc(aws) should include("TheTable")
-        desc(aws) should include("TheKey")
+        describe(aws) should include("Query")
+        describe(aws) should include("TheTable")
+        describe(aws) should include("TheKey")
       }
 
       "reporting batch write problems" in {
         val write = new WriteRequest().withPutRequest(new PutRequest().withItem(keyItem))
         val remove = new WriteRequest().withDeleteRequest(new DeleteRequest().withKey(key2Item))
         val aws = new BatchWriteItemRequest().withRequestItems(Map("TheTable" -> Seq(write, remove).asJava).asJava)
-        desc(aws) should include("BatchWriteItem")
-        desc(aws) should include("TheTable")
-        desc(aws) should include("put[par=TheKey,num=42]")
-        desc(aws) should include("del[par=The2Key,num=43]")
+        describe(aws) should include("BatchWriteItem")
+        describe(aws) should include("TheTable")
+        describe(aws) should include("put[par=TheKey,num=42]")
+        describe(aws) should include("del[par=The2Key,num=43]")
       }
 
       "reporting batch read problems" in {
         val ka = new KeysAndAttributes().withKeys(keyItem, key2Item)
         val aws = new BatchGetItemRequest().withRequestItems(Map("TheTable" -> ka).asJava)
-        desc(aws) should include("BatchGetItem")
-        desc(aws) should include("TheTable")
-        desc(aws) should include("TheKey")
-        desc(aws) should include("42")
-        desc(aws) should include("The2Key")
-        desc(aws) should include("43")
+        describe(aws) should include("BatchGetItem")
+        describe(aws) should include("TheTable")
+        describe(aws) should include("TheKey")
+        describe(aws) should include("42")
+        describe(aws) should include("The2Key")
+        describe(aws) should include("43")
       }
     }
 

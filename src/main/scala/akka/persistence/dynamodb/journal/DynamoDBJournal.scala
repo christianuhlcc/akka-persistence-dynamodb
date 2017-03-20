@@ -5,26 +5,21 @@ package akka.persistence.dynamodb.journal
 
 import java.nio.ByteBuffer
 import java.util.{ HashMap => JHMap, Map => JMap }
+
 import akka.Done
-import akka.actor.{ ActorLogging, ActorRefFactory, ActorSystem }
-import akka.event.{ Logging, LoggingAdapter }
+import akka.actor.{ ActorLogging, ActorRef }
 import akka.pattern.pipe
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.{ AtomicWrite, Persistence, PersistentRepr }
 import akka.serialization.SerializationExtension
 import akka.stream.ActorMaterializer
 import akka.util.ByteString
-import com.amazonaws.AmazonServiceException
-import com.amazonaws.auth.BasicAWSCredentials
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient
 import com.amazonaws.services.dynamodbv2.model._
 import com.typesafe.config.Config
+
 import scala.collection.immutable
-import scala.concurrent.{ ExecutionContext, Future }
-import scala.util.{ Try, Success, Failure }
-import scala.util.control.NoStackTrace
-import akka.actor.ActorRef
-import scala.concurrent.Promise
+import scala.concurrent.{ Future, Promise }
+import scala.util.{ Success, Try }
 
 class DynamoDBJournalFailure(message: String, cause: Throwable = null) extends RuntimeException(message, cause)
 class DynamoDBJournalRejection(message: String, cause: Throwable = null) extends RuntimeException(message, cause)
@@ -68,7 +63,6 @@ private[akka] case class SetDBHelperReporter(ref: ActorRef)
 case class Purged(persistenceId: String)
 
 class DynamoDBJournal(config: Config) extends AsyncWriteJournal with DynamoDBRecovery with DynamoDBRequests with ActorLogging {
-  import context.dispatcher
 
   implicit val materializer = ActorMaterializer()
 
@@ -86,8 +80,6 @@ class DynamoDBJournal(config: Config) extends AsyncWriteJournal with DynamoDBRec
     case Success(result) => log.info("using DynamoDB table {}", result)
     case _               => log.error("persistent actor requests will fail until the table '{}' is accessible", JournalTable)
   }
-
-  override def postStop(): Unit = dynamo.shutdown()
 
   private case class OpFinished(pid: String, f: Future[Done])
   private val opQueue: JMap[String, Future[Done]] = new JHMap
